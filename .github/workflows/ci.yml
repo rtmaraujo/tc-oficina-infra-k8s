@@ -35,6 +35,11 @@ jobs:
           RDS_ENDPOINT: localhost:5432
           ECR_IMAGE: 000000000000.dkr.ecr.us-west-2.amazonaws.com/tc-oficina:dummy
           NODE_PORT: 30080
+          NODE_PORT_AUTH: 30082
+          AUTH_IMAGE: 000000000000.dkr.ecr.us-west-2.amazonaws.com/tc-oficina:auth-dummy
+          DB_URL: jdbc:postgresql://localhost:5432/oficina_db
+          DB_USER: dummy
+          DB_PASSWORD: dummy
           SPRING_DATASOURCE_PASSWORD: dummy
           ADMIN_USUARIO: dummy
           ADMIN_SENHA: dummy
