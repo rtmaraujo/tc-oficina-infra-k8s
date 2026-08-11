@@ -4,7 +4,12 @@ set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -y
-apt-get install -y curl awscli
+apt-get install -y curl unzip
+
+# AWS CLI v2 (o pacote 'awscli' do apt nao existe no Ubuntu 24.04)
+curl -sS https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp/aws
+/tmp/aws/aws/install
 
 export AWS_ACCESS_KEY_ID="${ecr_access_key}"
 export AWS_SECRET_ACCESS_KEY="${ecr_secret_key}"

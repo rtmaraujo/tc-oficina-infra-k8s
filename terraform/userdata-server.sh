@@ -4,7 +4,12 @@ set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -y
-apt-get install -y curl awscli jq
+apt-get install -y curl unzip jq
+
+# AWS CLI v2 (o pacote 'awscli' do apt nao existe no Ubuntu 24.04)
+curl -sS https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp/aws
+/tmp/aws/aws/install
 
 # Credenciais temporarias para gerar o token de login do ECR
 export AWS_ACCESS_KEY_ID="${ecr_access_key}"
