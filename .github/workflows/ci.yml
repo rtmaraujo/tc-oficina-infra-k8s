@@ -29,9 +29,23 @@ jobs:
           curl -L https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
           sudo mv kubeconform /usr/local/bin/
 
-      - name: Validar Manifestos Kubernetes
+      - name: Renderizar e Validar Manifestos Kubernetes
+        env:
+          NAMESPACE: tc-oficina
+          RDS_ENDPOINT: localhost:5432
+          ECR_IMAGE: 000000000000.dkr.ecr.us-west-2.amazonaws.com/tc-oficina:dummy
+          NODE_PORT: 30080
+          SPRING_DATASOURCE_PASSWORD: dummy
+          ADMIN_USUARIO: dummy
+          ADMIN_SENHA: dummy
+          JWT_SECRET: dummy
         run: |
-          kubeconform -summary -strict k8s/*.yaml
+          sudo apt-get update -qq && sudo apt-get install -y -qq gettext-base
+          mkdir -p rendered
+          for f in k8s/*.yaml; do
+            envsubst < "$f" > "rendered/$(basename "$f")"
+          done
+          kubeconform -summary -strict rendered/*.yaml
 
   terraform-validate:
     runs-on: ubuntu-latest
@@ -102,6 +116,10 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION }}
+          TF_VAR_k3s_token: ${{ secrets.K3S_TOKEN }}
+          TF_VAR_ecr_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_ecr_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_ecr_session_token: ${{ secrets.AWS_SESSION_TOKEN }}
 
   apply-producao:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -148,6 +166,10 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION }}
+          TF_VAR_k3s_token: ${{ secrets.K3S_TOKEN }}
+          TF_VAR_ecr_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_ecr_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_ecr_session_token: ${{ secrets.AWS_SESSION_TOKEN }}
 
       - name: Terraform Outputs
         run: terraform output

@@ -4,6 +4,7 @@
 *.tfstate.*
 *.tfvars
 .terraform.lock.hcl
+*.tfplan
 
 # AWS
 .aws/
