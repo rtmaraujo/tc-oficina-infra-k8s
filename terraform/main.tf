@@ -1,8 +1,23 @@
-data "aws_eks_cluster_auth" "tc" {
-  name = aws_eks_cluster.tc.name
+data "aws_availability_zones" "available" {}
+
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
-data "aws_availability_zones" "available" {}
+# ============================================
+# Rede
+# ============================================
 
 resource "aws_vpc" "tc" {
   cidr_block           = var.vpc_cidr
@@ -45,21 +60,6 @@ resource "aws_subnet" "private" {
   }
 }
 
-resource "aws_eip" "nat" {
-  count  = 1
-  domain = "vpc"
-}
-
-resource "aws_nat_gateway" "tc" {
-  count         = 1
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
-
-  tags = {
-    Name = "tc-oficina-nat"
-  }
-}
-
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.tc.id
 
@@ -75,11 +75,6 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.tc.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.tc[0].id
-  }
 
   tags = {
     Name = "tc-oficina-rt-private"
@@ -98,38 +93,9 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
-resource "aws_eks_cluster" "tc" {
-  name     = var.cluster_name
-  role_arn = aws_iam_role.eks_cluster.arn
-
-  vpc_config {
-    subnet_ids             = concat(aws_subnet.public[*].id, aws_subnet.private[*].id)
-    endpoint_public_access = true
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster
-  ]
-}
-
-resource "aws_eks_node_group" "tc" {
-  cluster_name    = aws_eks_cluster.tc.name
-  node_group_name = "tc-oficina-nodes"
-  node_role_arn   = aws_iam_role.eks_nodegroup.arn
-  subnet_ids      = aws_subnet.private[*].id
-
-  scaling_config {
-    desired_size = var.node_count
-    min_size     = var.node_min
-    max_size     = var.node_max
-  }
-
-  instance_types = [var.node_instance_type]
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_nodegroup
-  ]
-}
+# ============================================
+# ECR
+# ============================================
 
 resource "aws_ecr_repository" "tc" {
   name                 = "tc-oficina"
@@ -140,54 +106,140 @@ resource "aws_ecr_repository" "tc" {
   }
 }
 
-# --- IAM ---
+# ============================================
+# Kubernetes k3s em EC2 (cluster auto-gerenciado)
+#   - Cluster K8s real (control plane + workers)
+#   - HPA: metrics-server ja embutido no k3s
+# ============================================
 
-resource "aws_iam_role" "eks_cluster" {
-  name = "tc-oficina-eks-cluster-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "eks.amazonaws.com"
-      }
-    }]
-  })
+resource "aws_key_pair" "k3s" {
+  key_name   = var.k3s_key_name
+  public_key = file("${path.module}/k3s-key.pub")
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cluster" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.eks_cluster.name
+resource "aws_security_group" "k3s" {
+  name        = "tc-oficina-k3s-sg"
+  description = "Security group do cluster k3s (EC2)"
+  vpc_id      = aws_vpc.tc.id
+
+  ingress {
+    description = "SSH (CI/CD)"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "API do Kubernetes (kubectl)"
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "NodePort da aplicacao"
+    from_port   = 30000
+    to_port     = 32767
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Comunicacao interna da VPC"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "tc-oficina-k3s-sg"
+  }
 }
 
-resource "aws_iam_role" "eks_nodegroup" {
-  name = "tc-oficina-eks-nodegroup-role"
+resource "aws_instance" "k3s_server" {
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.k3s_server_instance_type
+  subnet_id                   = aws_subnet.public[0].id
+  private_ip                  = "10.0.0.10"
+  associate_public_ip_address = true
+  key_name                    = aws_key_pair.k3s.key_name
+  vpc_security_group_ids      = [aws_security_group.k3s.id]
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-    }]
-  })
+  user_data = base64encode(templatefile("${path.module}/userdata-server.sh", {
+    k3s_token         = var.k3s_token
+    ecr_url           = aws_ecr_repository.tc.repository_url
+    region            = var.aws_region
+    ecr_access_key    = var.ecr_access_key_id
+    ecr_secret_key    = var.ecr_secret_access_key
+    ecr_session_token = var.ecr_session_token
+  }))
+
+  root_block_device {
+    volume_size           = 12
+    volume_type           = "gp3"
+    delete_on_termination = true
+    tags = {
+      Name = "tc-oficina-k3s-server-root"
+    }
+  }
+
+  tags = {
+    Name = "tc-oficina-k3s-server"
+  }
+
+  depends_on = [aws_internet_gateway.tc]
 }
 
-resource "aws_iam_role_policy_attachment" "eks_nodegroup" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.eks_nodegroup.name
+resource "aws_eip" "k3s" {
+  domain   = "vpc"
+  instance = aws_instance.k3s_server.id
+
+  tags = {
+    Name = "tc-oficina-k3s-eip"
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "eks_nodegroup_cni" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.eks_nodegroup.name
-}
+resource "aws_instance" "k3s_worker" {
+  count                       = var.k3s_worker_count
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.k3s_worker_instance_type
+  subnet_id                   = aws_subnet.public[count.index % 2].id
+  associate_public_ip_address = true
+  key_name                    = aws_key_pair.k3s.key_name
+  vpc_security_group_ids      = [aws_security_group.k3s.id]
 
-resource "aws_iam_role_policy_attachment" "eks_nodegroup_ecr" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.eks_nodegroup.name
+  user_data = base64encode(templatefile("${path.module}/userdata-worker.sh", {
+    k3s_token         = var.k3s_token
+    server_private_ip = "10.0.0.10"
+    ecr_url           = aws_ecr_repository.tc.repository_url
+    region            = var.aws_region
+    ecr_access_key    = var.ecr_access_key_id
+    ecr_secret_key    = var.ecr_secret_access_key
+    ecr_session_token = var.ecr_session_token
+  }))
+
+  root_block_device {
+    volume_size           = 12
+    volume_type           = "gp3"
+    delete_on_termination = true
+    tags = {
+      Name = "tc-oficina-k3s-worker-${count.index + 1}-root"
+    }
+  }
+
+  tags = {
+    Name = "tc-oficina-k3s-worker-${count.index + 1}"
+  }
+
+  depends_on = [aws_instance.k3s_server]
 }
