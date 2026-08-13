@@ -19,6 +19,8 @@ spec:
         app: tc-oficina-auth
 
     spec:
+      imagePullSecrets:
+        - name: regcred
       containers:
         - name: auth
           image: ${AUTH_IMAGE}
