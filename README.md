@@ -1,16 +1,18 @@
 # tc-oficina-infra-k8s
 
-Infraestrutura como código (Terraform) do cluster Kubernetes da aplicação de oficina mecânica **tc-oficina**.
+Infraestrutura como código (Terraform) do cluster Kubernetes (**k3s autogerenciado em EC2**)
+da aplicação de oficina mecânica **tc-oficina**.
 
 ## Escopo
 
 Este repositório provisiona e gerencia:
 
-- **VPC** completa (subnets públicas/privadas, Internet Gateway, NAT Gateway, route tables)
-- **Cluster EKS** (Amazon Elastic Kubernetes Service) com alta disponibilidade
-- **Node group** com auto scaling (2 a 10 nós)
-- **Repositório ECR** para a imagem da aplicação
-- **Manifestos Kubernetes** da aplicação (namespace, deployment, service, configmap, secret, HPA)
+- **VPC** completa (subnets públicas/privadas, Internet Gateway, route tables)
+- **Cluster k3s** real (1 servidor + 2 workers, Ubuntu 24.04, `t3.small`) com bootstrap via `userdata`
+- **Elastic IP** para o servidor do cluster (acesso público via NodePort)
+- **Repositório ECR** para as imagens da aplicação e do auth
+- **Manifestos Kubernetes** da aplicação (namespace, deployments, services, configmap, secret, HPA)
+- Suporte a **dois ambientes**: produção (`tc-oficina`) e homologação (`tc-oficina-homolog`)
 
 > O banco de dados gerenciado (RDS PostgreSQL) vive no repositório [tc-oficina-infra-db](../tc-oficina-infra-db).
 
@@ -18,79 +20,74 @@ Este repositório provisiona e gerencia:
 
 ```
 tc-oficina-infra-k8s/
-├── terraform/          # Provisionamento do cluster EKS + VPC + ECR
+├── terraform/          # Provisionamento do cluster k3s + VPC + ECR
 │   ├── provider.tf     # Providers AWS e Kubernetes
-│   ├── main.tf         # VPC, EKS, node group, ECR, IAM
-│   ├── variables.tf    # Variáveis (região, cluster, nós)
-│   └── outputs.tf      # Endpoint, ECR URL, comando kubeconfig
-├── k8s/                # Manifestos da aplicação
+│   ├── main.tf         # VPC, k3s server/workers, ECR, SG, EIP
+│   ├── variables.tf    # Variáveis (região, instâncias, token)
+│   ├── outputs.tf      # Endpoint, ECR URL
+│   ├── userdata-server.sh / userdata-worker.sh  # Bootstrap do k3s
+│   └── k3s-key.pub     # Chave pública SSH do cluster
+├── k8s/                # Manifestos da aplicação (envsubst)
 │   ├── namespace.yaml
 │   ├── app-deployment.yaml
+│   ├── auth-deployment.yaml
 │   ├── services.yaml
+│   ├── auth-service.yaml
 │   ├── configmap.yaml
 │   ├── secrets.yaml
+│   ├── auth-secrets.yaml
 │   └── hpa.yaml
 └── .github/workflows/  # CI/CD (Terraform + Kubeconform)
 ```
 
 ## Tecnologias
 
-- Terraform 1.6+ (AWS provider ~> 5.0, Kubernetes provider ~> 2.30)
-- Amazon EKS
-- Kubernetes (manifests + HPA)
+- Terraform 1.6+ (AWS provider ~> 5.0)
+- k3s (Kubernetes real, `metrics-server` embutido para HPA)
+- AWS EC2 / VPC / EIP / ECR
 - GitHub Actions (CI/CD)
-
-## Pré-requisitos
-
-- Conta AWS com permissões para EKS, VPC, ECR e IAM
-- `aws` CLI e `terraform` instalados
-- Secrets no GitHub: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e var `AWS_REGION`
-
-## Como executar
-
-```bash
-cd terraform
-
-terraform init
-terraform validate
-terraform plan -out=tfplan
-terraform apply tfplan
-
-# Gerar kubeconfig para usar os manifestos
-aws eks update-kubeconfig --name tc-oficina --region us-east-1
-
-# Aplicar manifestos da aplicação
-kubectl apply -f k8s/ -R
-```
 
 ## CI/CD
 
 O workflow em `.github/workflows/ci.yml`:
 
-1. Valida os manifestos Kubernetes com **Kubeconform**
+1. Valida os manifestos Kubernetes com **Kubeconform** (renderizados via `envsubst`)
 2. Executa `terraform fmt`, `init` e `validate`
 3. Gera `plan` na branch `homologacao`
 4. Executa `apply` automático na branch `main`
+
+## Ambientes
+
+| Ambiente | Namespace | App | Auth container |
+|----------|-----------|-----|----------------|
+| Produção | `tc-oficina` | NodePort `30080` | NodePort `30082` |
+| Homologação | `tc-oficina-homolog` | NodePort `30081` | NodePort `30083` |
 
 ## Diagrama da Arquitetura
 
 ```mermaid
 flowchart TB
-  subgraph AWS[AWS]
+  subgraph AWS[AWS us-west-2]
     VPC[VPC 10.0.0.0/16]
     IGW[Internet Gateway]
-    NAT[NAT Gateway]
-    EKS[EKS Cluster]
-    NG[Node Group 2-10]
+    EIP[EIP 35.84.122.229]
+    SRV[k3s server t3.small]
+    W1[worker-1 t3.small]
+    W2[worker-2 t3.small]
     ECR[ECR tc-oficina]
-    RDS[(RDS PostgreSQL)]
+    RDS[(RDS PostgreSQL privado)]
   end
 
-  VPC --> IGW
-  VPC --> NAT
-  EKS --> NG
-  NG -->|imagem| ECR
-  APP[App Deployment] --> RDS
+  IGW --> VPC
+  SRV -->|control plane| W1
+  SRV -->|control plane| W2
+  EIP --> SRV
+  SRV -.pull imagem.-> ECR
+  W1 -.pull imagem.-> ECR
+  W2 -.pull imagem.-> ECR
+  SRV -->|JDBC 5432| RDS
+  W1 -->|JDBC 5432| RDS
+  W2 -->|JDBC 5432| RDS
 
   style AWS fill:#e3f2fd,stroke:#1565c0
 ```
