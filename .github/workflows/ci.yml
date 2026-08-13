@@ -32,6 +32,8 @@ jobs:
       - name: Renderizar e Validar Manifestos Kubernetes
         env:
           NAMESPACE: tc-oficina
+          MIN_REPLICAS: 2
+          MAX_REPLICAS: 3
           RDS_ENDPOINT: localhost:5432
           ECR_IMAGE: 000000000000.dkr.ecr.us-west-2.amazonaws.com/tc-oficina:dummy
           NODE_PORT: 30080
