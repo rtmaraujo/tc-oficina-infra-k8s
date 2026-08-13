@@ -19,6 +19,8 @@ spec:
         app: tc-oficina
 
     spec:
+      imagePullSecrets:
+        - name: regcred
       containers:
         - name: app
           image: ${ECR_IMAGE}
