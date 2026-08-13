@@ -44,6 +44,10 @@ jobs:
           ADMIN_USUARIO: dummy
           ADMIN_SENHA: dummy
           JWT_SECRET: dummy
+          NEW_RELIC_APP_NAME: dummy
+          NEW_RELIC_APP_NAME_AUTH: dummy
+          NEW_RELIC_LICENSE_KEY: dummy
+          NEW_RELIC_LOG_LEVEL: info
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq gettext-base
           mkdir -p rendered
