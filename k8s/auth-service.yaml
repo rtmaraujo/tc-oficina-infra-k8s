@@ -4,7 +4,7 @@ metadata:
   name: auth-service
   namespace: ${NAMESPACE}
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: tc-oficina-auth
   ports:
@@ -12,4 +12,3 @@ spec:
       protocol: TCP
       port: 80
       targetPort: 8080
-      nodePort: ${NODE_PORT_AUTH}

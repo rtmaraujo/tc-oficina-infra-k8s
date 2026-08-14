@@ -1,0 +1,55 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: auth-security-headers
+  namespace: ${NAMESPACE}
+spec:
+  headers:
+    browserXssFilter: true
+    contentTypeNosniff: true
+    frameDeny: true
+    sslRedirect: false
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: auth-ratelimit
+  namespace: ${NAMESPACE}
+spec:
+  rateLimit:
+    average: 20
+    burst: 40
+    period: 1s
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: auth-cors
+  namespace: ${NAMESPACE}
+spec:
+  headers:
+    accessControlAllowOriginList:
+      - "*"
+    accessControlAllowMethods:
+      - "POST,OPTIONS"
+    accessControlAllowHeaders:
+      - "Authorization,Content-Type"
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: auth-route
+  namespace: ${NAMESPACE}
+spec:
+  entryPoints:
+    - ${ENTRYPOINT}
+  routes:
+    - kind: Rule
+      match: PathPrefix(`/auth`) || PathPrefix(`/health`)
+      services:
+        - name: auth-service
+          port: 80
+      middlewares:
+        - name: auth-security-headers
+        - name: auth-cors
+        - name: auth-ratelimit

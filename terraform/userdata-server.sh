@@ -34,8 +34,9 @@ configs:
 EOF
 
 # Instala o no server (control plane) do k3s
-#   - traefik/servicelb desabilitados (usamos NodePort direto)
+#   - Traefik (API Gateway) e servicelb habilitados: ponto unico de entrada via
+#     ingress (portas 80/443) e homologacao (8081/8443) configurados via HelmChartConfig
 #   - metrics-server embutido habilita o HPA
 export K3S_TOKEN="${k3s_token}"
-export INSTALL_K3S_EXEC="server --disable traefik --disable servicelb --write-kubeconfig-mode 644"
+export INSTALL_K3S_EXEC="server --write-kubeconfig-mode 644"
 curl -sfL https://get.k3s.io | sh -

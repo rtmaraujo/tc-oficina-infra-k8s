@@ -1,0 +1,24 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        expose:
+          default: true
+      websecure:
+        expose:
+          default: true
+      web-homolog:
+        port: 8081
+        exposedPort: 8081
+        expose:
+          default: true
+      web-homolog-secure:
+        port: 8443
+        exposedPort: 8443
+        expose:
+          default: true
