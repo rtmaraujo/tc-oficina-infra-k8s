@@ -171,14 +171,6 @@ resource "aws_security_group" "k3s" {
   }
 
   ingress {
-    description = "API Gateway Traefik HTTPS (homologacao)"
-    from_port   = 8443
-    to_port     = 8443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
     description = "Comunicacao interna da VPC"
     from_port   = 0
     to_port     = 0

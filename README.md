@@ -77,7 +77,7 @@ Middlewares aplicados: security headers, CORS e rate limiting.
 | Ambiente | Namespace | Entrada do Gateway | App | Auth container |
 |----------|-----------|--------------------|-----|----------------|
 | Produção | `tc-oficina` | `http://35.84.122.229` (porta 80/443) | app via Traefik | auth via Traefik |
-| Homologação | `tc-oficina-homolog` | `http://35.84.122.229:8081` (porta 8081/8443) | app via Traefik | auth via Traefik |
+| Homologação | `tc-oficina-homolog` | `http://35.84.122.229:8081` | app via Traefik | auth via Traefik |
 
 ## Diagrama da Arquitetura
 
@@ -92,7 +92,7 @@ flowchart TB
     W2[worker-2 t3.small]
     ECR[ECR tc-oficina]
     RDS[(RDS PostgreSQL privado)]
-    TRAEFIK[API Gateway Traefik<br/>80/443 prod - 8081/8443 homolog]
+    TRAEFIK[API Gateway Traefik<br/>80/443 prod - 8081 homolog]
     APP[App Deployment]
     AUTH[Auth Deployment]
   end
@@ -105,7 +105,7 @@ flowchart TB
   W1 -.pull imagem.-> ECR
   W2 -.pull imagem.-> ECR
   CLIENTE[Cliente] -->|HTTP 80/443| EIP
-  CLIENTE -->|HTTP 8081/8443 homolog| EIP
+  CLIENTE -->|HTTP 8081 homolog| EIP
   EIP --> TRAEFIK
   TRAEFIK -->|/api /actuator /swagger| APP
   TRAEFIK -->|/auth /health| AUTH
