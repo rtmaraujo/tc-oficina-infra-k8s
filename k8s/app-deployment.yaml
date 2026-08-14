@@ -43,6 +43,17 @@ spec:
               cpu: "500m"
               memory: "1Gi"
 
+          # Startup lento (~90-100s: agente New Relic + t3.small). startupProbe cobre
+          # o periodo de boot; liveness/readiness so agem depois.
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 12
+
           livenessProbe:
             httpGet:
               path: /actuator/health
