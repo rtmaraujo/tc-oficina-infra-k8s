@@ -34,7 +34,7 @@ jobs:
           NAMESPACE: tc-oficina
           ENTRYPOINT: web
           MIN_REPLICAS: 2
-          MAX_REPLICAS: 3
+          MAX_REPLICAS: 2
           RDS_ENDPOINT: localhost:5432
           ECR_IMAGE: 000000000000.dkr.ecr.us-west-2.amazonaws.com/tc-oficina:dummy
           AUTH_IMAGE: 000000000000.dkr.ecr.us-west-2.amazonaws.com/tc-oficina:auth-dummy
