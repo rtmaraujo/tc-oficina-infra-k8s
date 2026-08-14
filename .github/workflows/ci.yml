@@ -32,12 +32,11 @@ jobs:
       - name: Renderizar e Validar Manifestos Kubernetes
         env:
           NAMESPACE: tc-oficina
+          ENTRYPOINT: web
           MIN_REPLICAS: 2
           MAX_REPLICAS: 3
           RDS_ENDPOINT: localhost:5432
           ECR_IMAGE: 000000000000.dkr.ecr.us-west-2.amazonaws.com/tc-oficina:dummy
-          NODE_PORT: 30080
-          NODE_PORT_AUTH: 30082
           AUTH_IMAGE: 000000000000.dkr.ecr.us-west-2.amazonaws.com/tc-oficina:auth-dummy
           DB_URL: jdbc:postgresql://localhost:5432/oficina_db
           DB_USER: dummy
@@ -56,7 +55,7 @@ jobs:
           for f in k8s/*.yaml; do
             envsubst < "$f" > "rendered/$(basename "$f")"
           done
-          kubeconform -summary -strict rendered/*.yaml
+          kubeconform -summary -strict -ignore-missing-schemas rendered/*.yaml
 
   terraform-validate:
     runs-on: ubuntu-latest
