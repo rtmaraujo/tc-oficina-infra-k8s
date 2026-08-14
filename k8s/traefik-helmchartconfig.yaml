@@ -17,8 +17,3 @@ spec:
         exposedPort: 8081
         expose:
           default: true
-      web-homolog-secure:
-        port: 8443
-        exposedPort: 8443
-        expose:
-          default: true
